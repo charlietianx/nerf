@@ -462,6 +462,7 @@ def config_parser():
 
     import configargparse
     parser = configargparse.ArgumentParser()
+    parser.add_argument("-f", "--fff", help="a dummy argument to fool ipython", default="1")
     parser.add_argument('--config', is_config_file=True,
                         help='config file path')
     parser.add_argument("--expname", type=str, help='experiment name')
@@ -497,12 +498,12 @@ def config_parser():
                         help='specific weights npy file to reload for coarse network')
     parser.add_argument("--random_seed", type=int, default=None,
                         help='fix random seed for repeatability')
-    
+
     # pre-crop options
     parser.add_argument("--precrop_iters", type=int, default=0,
                         help='number of steps to train on central crops')
     parser.add_argument("--precrop_frac", type=float,
-                        default=.5, help='fraction of img taken for central crops')    
+                        default=.5, help='fraction of img taken for central crops')
 
     # rendering options
     parser.add_argument("--N_samples", type=int, default=64,
@@ -576,7 +577,7 @@ def train():
 
     parser = config_parser()
     args = parser.parse_args()
-    
+
     if args.random_seed is not None:
         print('Fixing random seed', args.random_seed)
         np.random.seed(args.random_seed)
@@ -750,7 +751,7 @@ def train():
     print('VAL views are', i_val)
 
     # Summary writers
-    writer = tf.contrib.summary.create_file_writer(
+    writer = tf.summary.create_file_writer(
         os.path.join(basedir, 'summaries', expname))
     writer.set_as_default()
 
@@ -785,8 +786,8 @@ def train():
                     dH = int(H//2 * args.precrop_frac)
                     dW = int(W//2 * args.precrop_frac)
                     coords = tf.stack(tf.meshgrid(
-                        tf.range(H//2 - dH, H//2 + dH), 
-                        tf.range(W//2 - dW, W//2 + dW), 
+                        tf.range(H//2 - dH, H//2 + dH),
+                        tf.range(W//2 - dW, W//2 + dW),
                         indexing='ij'), -1)
                     if i < 10:
                         print('precrop', dH, dW, coords[0,0], coords[-1,-1])
@@ -875,12 +876,13 @@ def train():
 
             print(expname, i, psnr.numpy(), loss.numpy(), global_step.numpy())
             print('iter time {:.05f}'.format(dt))
-            with tf.contrib.summary.record_summaries_every_n_global_steps(args.i_print):
-                tf.contrib.summary.scalar('loss', loss)
-                tf.contrib.summary.scalar('psnr', psnr)
-                tf.contrib.summary.histogram('tran', trans)
-                if args.N_importance > 0:
-                    tf.contrib.summary.scalar('psnr0', psnr0)
+            # with tf.summary.record_summaries_every_n_global_steps(args.i_print):
+            tf.summary.experimental.set_step(i)
+            tf.summary.scalar('loss', loss, step=i)
+            tf.summary.scalar('psnr', psnr, step=i)
+            tf.summary.histogram('tran', trans, step=i)
+            if args.N_importance > 0:
+                tf.summary.scalar('psnr0', psnr0, step=i)
 
             if i % args.i_img == 0:
 
@@ -893,27 +895,27 @@ def train():
                                                 **render_kwargs_test)
 
                 psnr = mse2psnr(img2mse(rgb, target))
-                
+
                 # Save out the validation image for Tensorboard-free monitoring
                 testimgdir = os.path.join(basedir, expname, 'tboard_val_imgs')
                 if i==0:
                     os.makedirs(testimgdir, exist_ok=True)
                 imageio.imwrite(os.path.join(testimgdir, '{:06d}.png'.format(i)), to8b(rgb))
 
-                with tf.contrib.summary.record_summaries_every_n_global_steps(args.i_img):
+                # with tf.summary.should_record_summaries(i % args.i_img == 0):
 
-                    tf.contrib.summary.image('rgb', to8b(rgb)[tf.newaxis])
-                    tf.contrib.summary.image(
-                        'disp', disp[tf.newaxis, ..., tf.newaxis])
-                    tf.contrib.summary.image(
-                        'acc', acc[tf.newaxis, ..., tf.newaxis])
+                tf.summary.image('rgb', to8b(rgb)[tf.newaxis])
+                tf.summary.image(
+                    'disp', disp[tf.newaxis, ..., tf.newaxis])
+                tf.summary.image(
+                    'acc', acc[tf.newaxis, ..., tf.newaxis])
 
-                    tf.contrib.summary.scalar('psnr_holdout', psnr)
-                    tf.contrib.summary.image('rgb_holdout', target[tf.newaxis])
+                tf.summary.scalar('psnr_holdout', psnr)
+                tf.summary.image('rgb_holdout', target[tf.newaxis])
 
                 if args.N_importance > 0:
 
-                    with tf.contrib.summary.record_summaries_every_n_global_steps(args.i_img):
+                    # with tf.summary.record_summaries_every_n_global_steps(args.i_img):
                         tf.contrib.summary.image(
                             'rgb0', to8b(extras['rgb0'])[tf.newaxis])
                         tf.contrib.summary.image(
