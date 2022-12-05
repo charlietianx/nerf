@@ -151,7 +151,7 @@ def render_rays(ray_batch,
 
         # Disparity map is inverse depth.
         disp_map = 1./tf.maximum(1e-10, depth_map /
-                                 tf.reduce_sum(weights, axis=-1))
+                                 tf.maximum(1e-10, tf.reduce_sum(weights, axis=-1)))
 
         # Sum of weights along each ray. This value is in [0, 1] up to numerical error.
         acc_map = tf.reduce_sum(weights, -1)
@@ -238,6 +238,7 @@ def render_rays(ray_batch,
         ret['z_std'] = tf.math.reduce_std(z_samples, -1)  # [N_rays]
 
     for k in ret:
+
         tf.debugging.check_numerics(ret[k], 'output {}'.format(k))
 
     return ret
@@ -465,11 +466,11 @@ def config_parser():
     parser.add_argument("-f", "--fff", help="a dummy argument to fool ipython", default="1")
     parser.add_argument('--config', is_config_file=True,
                         help='config file path')
-    parser.add_argument("--expname", type=str, help='experiment name')
+    parser.add_argument("--expname", type=str, default='fern', help='experiment name')
     parser.add_argument("--basedir", type=str, default='./logs/',
                         help='where to store ckpts and logs')
     parser.add_argument("--datadir", type=str,
-                        default='./data/llff/fern', help='input data directory')
+                        default='./data/nerf_llff_data/fern', help='input data directory')
 
     # training options
     parser.add_argument("--netdepth", type=int, default=8,
@@ -508,7 +509,7 @@ def config_parser():
     # rendering options
     parser.add_argument("--N_samples", type=int, default=64,
                         help='number of coarse samples per ray')
-    parser.add_argument("--N_importance", type=int, default=0,
+    parser.add_argument("--N_importance", type=int, default=64,
                         help='number of additional fine samples per ray')
     parser.add_argument("--perturb", type=float, default=1.,
                         help='set to 0. for no jitter, 1. for jitter')
@@ -916,11 +917,11 @@ def train():
                 if args.N_importance > 0:
 
                     # with tf.summary.record_summaries_every_n_global_steps(args.i_img):
-                        tf.contrib.summary.image(
+                        tf.summary.image(
                             'rgb0', to8b(extras['rgb0'])[tf.newaxis])
-                        tf.contrib.summary.image(
+                        tf.summary.image(
                             'disp0', extras['disp0'][tf.newaxis, ..., tf.newaxis])
-                        tf.contrib.summary.image(
+                        tf.summary.image(
                             'z_std', extras['z_std'][tf.newaxis, ..., tf.newaxis])
 
         global_step.assign_add(1)
